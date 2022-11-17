@@ -16,7 +16,7 @@ Used for other types not automatically supported by gson. The built-in serialize
 @JsonObjectField(name = "example")
 public Example example = new Example();
 ```
-Parameters: ``name=String``, [``fields=@SpecifyJsonField[]``](#specify_field), and ``methods=@SpecifyJsonGetterSetter[]``
+Parameters: ``name=String``, [``fields=@SpecifyJsonField[]``](#specify_field), and [``methods=@SpecifyJsonGetterSetter[]``](#specify_gettersetter)
 
 ##@JsonField
 Used for when you want to create your own serialization
@@ -67,6 +67,22 @@ class ExampleParent {
 ```
 ## <a name="specify_field"></a>@SpecifyJsonField
 Used to specify field names for an object
+
+```java
+@JsonObjectField(name = "example",
+    fields = {
+        @SpecifyJsonField(json_name="name_in_json", variable_name="field_name")
+    })
+```
+## <a name="specify_gettersetter"></a>@SpecifyJsonGetterSetter
+Used to specify getters and setters for json objects
+
+```java
+@JsonObjectField(name = "example",
+    fields = {
+        @SpecifyJsonField(json_name="name_in_json", getter_method_name="getter_method", setter_method_name="setter_method")
+    })
+```
 
 ## Serializing
 ```java
