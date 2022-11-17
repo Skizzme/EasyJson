@@ -7,6 +7,7 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
-public @interface JsonPropertyField {
-    String value();
+public @interface SpecifyJsonField {
+    String json_name();
+    String variable_name() default "";
 }
