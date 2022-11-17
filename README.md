@@ -18,7 +18,7 @@ public Example example = new Example();
 ```
 Parameters: ``name=String``, [``fields=@SpecifyJsonField[]``](#specify_field), and [``methods=@SpecifyJsonGetterSetter[]``](#specify_gettersetter)
 
-##@JsonField
+## @JsonField
 Used for when you want to create your own serialization
 
 ```java
