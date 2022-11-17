@@ -16,8 +16,10 @@ Used for other types not automatically supported by gson. The built-in serialize
 @JsonObjectField(name = "example")
 public Example example = new Example();
 ```
+Parameters: ``name=String``, ``fields=@SpecifyJsonField[]``, and ``methods=@SpecifyJsonGetterSetter[]``
+[link](#json_field)
 
-## @JsonField
+## <a name="json_field"></a>@JsonField
 Used for when you want to create your own serialization
 
 ```java

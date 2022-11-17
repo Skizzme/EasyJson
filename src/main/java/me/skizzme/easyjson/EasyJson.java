@@ -29,25 +29,32 @@ public class EasyJson {
             if (!mi.getter_method_name().equals("")) mapped_method_getter_names.put(mi.getter_method_name(), mi.json_name());
         }
 
+        // Will check the methods if they are specified getter methods, and if they are they wil
         for (Method m : obj.getClass().getMethods()) {
             try {
                 if (mapped_method_getter_names.containsKey(m.getName())) {
                     m.setAccessible(true);
                     addProperty(m.invoke(obj), object, mapped_method_getter_names.get(m.getName()), null);
                 }
-            } catch (InvocationTargetException | IllegalAccessException e) {
+            } catch (InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
                 e.printStackTrace();
             }
         }
+
         for (Field field : obj.getClass().getDeclaredFields()) {
             Annotation[] annotations = field.getDeclaredAnnotations();
 
             try {
+                // Checks the field if it is specified as a value field, if it is it will add the property
                 if (mapped_field_names.containsKey(field.getName())) {
                     field.setAccessible(true);
                     addProperty(field.get(obj), object, mapped_field_names.get(field.getName()), null);
                 }
             } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            } catch (InvocationTargetException e) {
+                e.printStackTrace();
+            } catch (NoSuchMethodException e) {
                 e.printStackTrace();
             }
 
@@ -57,7 +64,7 @@ public class EasyJson {
                         field.setAccessible(true);
                         Object value = field.get(obj);
 
-                        String name = annotation.value();
+                        String name = annotation.name();
                         Class<?> serializer = annotation.serializer();
                         try {
                             object.add(name, (JsonElement) serializer.getMethod("serialize", Object.class).invoke(serializer.getConstructors()[0].newInstance(), value));
@@ -75,7 +82,7 @@ public class EasyJson {
                         field.setAccessible(true);
                         Object value = field.get(obj);
 
-                        String name = annotation.value();
+                        String name = annotation.name();
                         object.add(name, serialize(value, annotation.fields(), annotation.methods()));
                     }
                     if (a instanceof JsonPropertyField annotation) {
@@ -84,7 +91,7 @@ public class EasyJson {
                     }
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
-                } catch (InaccessibleObjectException e) {
+                } catch (InaccessibleObjectException | NoSuchMethodException | InvocationTargetException e) {
                     e.printStackTrace();
                 }
             }
@@ -93,9 +100,19 @@ public class EasyJson {
         return object;
     }
 
-    private static void addProperty(Object value, JsonObject object, String name, JsonPropertyField annotation) throws IllegalAccessException {
+    private static void addProperty(Object value, JsonObject object, String name, JsonPropertyField annotation) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException {
         if (name == null && annotation != null)
-            name = annotation.value();
+            name = annotation.name();
+
+        if (value == null) {
+            throw new NullPointerException("Object value is null with name \"" + name + "\" for JSON: " + object);
+        }
+
+        if (value.getClass().isEnum()) {
+            object.addProperty(name, (int) value.getClass().getMethod("ordinal").invoke(value));
+            return;
+        }
+
         if (value instanceof Number val) {
             object.addProperty(name, val);
         } else if (value instanceof String val) {
