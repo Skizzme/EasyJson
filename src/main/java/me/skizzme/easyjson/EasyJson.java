@@ -105,7 +105,7 @@ public class EasyJson {
                     }
                     if (a instanceof JsonPropertyField annotation) {
                         field.setAccessible(true);
-                        System.out.println(object);
+//                        System.out.println(object);
                         addProperty(field.get(obj), object, null, annotation);
                     }
                 } catch (IllegalAccessException e) {

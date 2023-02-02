@@ -22,8 +22,8 @@ public class EasyJsonDeserializer<T> {
     public Collection deserializeList(JsonArray json, T instance) {
         Collection<T> list = new ArrayList<>();
         for (JsonElement e : json) {
-            System.out.println("ABC" + e);
-            System.out.print(instance.getClass().getGenericSuperclass().getTypeName());
+//            System.out.println("ABC" + e);
+//            System.out.print(instance.getClass().getGenericSuperclass().getTypeName());
             try {
                 list.add(this.deserialize(e.getAsJsonObject(), instance, new SpecifyJsonField[0], new SpecifyJsonGetterSetter[0]));
             } catch (Exception ex) {
@@ -46,7 +46,7 @@ public class EasyJsonDeserializer<T> {
             throw new NullPointerException("Instance is null for json: " + json);
         }
         Class c = instance.getClass();
-        System.out.println(json);
+//        System.out.println(json);
 
         //Mapping fields and setters as variable_name -> json_name
         HashMap<String, String> mapped_field_names = new HashMap<>();
