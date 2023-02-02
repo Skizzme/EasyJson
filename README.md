@@ -1,6 +1,23 @@
 # EasyJson
 I made this because I found GSON's built-in serialization annotation system and didn't like it.
 
+Serializer class:
+```java
+public class ExampleDeserializer extends JsonSerializer<Example> {
+    @Override
+    public JsonElement serialize(Example example) {
+        JsonObject el = new JsonObject();
+        el.addProperty("example_key", example.some_value);
+        return el;
+    }
+
+    @Override
+    public Example deserialize(JsonObject jsonObject) {
+        return new Example(jsonObject.get("example_key").getAsString());
+    }
+}
+```
+
 # Annotation Usage
 
 ## @JsonPropertyField
@@ -24,22 +41,6 @@ Used for when you want to create your own serialization
 ```java
 @JsonField(name = "example", serializer = ExampleSerializer.class)
 public Example example = new Example();
-```
-Serializer class:
-```java
-public class ExampleDeserializer extends JsonSerializer<Example> {
-    @Override
-    public JsonElement serialize(Example example) {
-        JsonObject el = new JsonObject();
-        el.addProperty("example_key", example.some_value);
-        return el;
-    }
-
-    @Override
-    public Example deserialize(JsonObject jsonObject) {
-        return new Example(jsonObject.get("example_key").getAsString());
-    }
-}
 ```
 
 ## @JsonInstantiateMethod
