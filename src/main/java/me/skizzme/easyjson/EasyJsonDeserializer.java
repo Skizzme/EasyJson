@@ -6,8 +6,10 @@ import me.skizzme.easyjson.exception.NoInstantiationMethod;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 
 public class EasyJsonDeserializer<T> {
 
@@ -15,6 +17,20 @@ public class EasyJsonDeserializer<T> {
 
     public T deserialize(JsonObject json, T instance) {
         return this.deserialize(json, instance, new SpecifyJsonField[0], new SpecifyJsonGetterSetter[0]);
+    }
+
+    public Collection deserializeList(JsonArray json, T instance) {
+        Collection<T> list = new ArrayList<>();
+        for (JsonElement e : json) {
+            System.out.println("ABC" + e);
+            System.out.print(instance.getClass().getGenericSuperclass().getTypeName());
+            try {
+                list.add(this.deserialize(e.getAsJsonObject(), instance, new SpecifyJsonField[0], new SpecifyJsonGetterSetter[0]));
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+        return list;
     }
 
     /**
@@ -30,6 +46,7 @@ public class EasyJsonDeserializer<T> {
             throw new NullPointerException("Instance is null for json: " + json);
         }
         Class c = instance.getClass();
+        System.out.println(json);
 
         //Mapping fields and setters as variable_name -> json_name
         HashMap<String, String> mapped_field_names = new HashMap<>();
@@ -79,6 +96,22 @@ public class EasyJsonDeserializer<T> {
                         f.set(instance, anno.serializer().getDeclaredMethod("deserialize", JsonObject.class).invoke(anno.serializer().getConstructors()[0].newInstance(), json.get(anno.name())));
                     }
                     if (a instanceof JsonObjectField anno) {
+
+                        JsonElement field_json = json.get(anno.name());
+                        if (f.getType().isArray()) {
+                            Object[] array = (Object[]) f.get(instance);
+                            JsonArray json_array = field_json.getAsJsonArray();
+                            for (int i = 0; i < json_array.size(); i++) {
+                                if (!json_array.get(i).isJsonNull()) {
+                                    array[i] = new EasyJsonDeserializer<>().deserialize(json_array.get(i).getAsJsonObject(), newInstance(f.getType().getComponentType()), anno.fields(), anno.methods());
+                                }
+                            }
+                        } else if (f.get(instance) instanceof Collection) {
+                            Collection field_array = (Collection) f.get(instance);
+                            for (JsonElement element : field_json.getAsJsonArray()) {
+                                field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0])), anno.fields(), anno.methods()));
+                            }
+                        }
                         f.setAccessible(true);
                         // Creates an instance of the field type if it is not already set
                         Object f_instance;
@@ -103,9 +136,19 @@ public class EasyJsonDeserializer<T> {
                         }
                         // Will loop through each element of the json array and deserialize each one as the specified generic type of the field
                         else if (field_json.isJsonArray()) {
-                            Collection field_array = (Collection) f.get(instance);
-                            for (JsonElement element : field_json.getAsJsonArray()) {
-                                field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]))));
+                            if (f.getType().isArray()) {
+                                Object[] array = (Object[]) f.get(instance);
+                                JsonArray json_array = field_json.getAsJsonArray();
+                                for (int i = 0; i < json_array.size(); i++) {
+                                    if (!json_array.get(i).isJsonNull()) {
+                                        array[i] = new EasyJsonDeserializer<>().deserialize(json_array.get(i).getAsJsonObject(), newInstance(f.getType().getComponentType()));
+                                    }
+                                }
+                            } else {
+                                Collection field_array = (Collection) f.get(instance);
+                                for (JsonElement element : field_json.getAsJsonArray()) {
+                                    field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]))));
+                                }
                             }
                         }
                     }
@@ -150,7 +193,21 @@ public class EasyJsonDeserializer<T> {
             f.set(instance, value.getAsBoolean());
         }
         if (value.isNumber()) {
-            f.set(instance, value.getAsNumber());
+            if (f.getType() == double.class) {
+                f.set(instance, value.getAsNumber().doubleValue());
+            } else if (f.getType() == int.class) {
+                f.set(instance, value.getAsNumber().intValue());
+            } else if (f.getType() == long.class) {
+                f.set(instance, value.getAsNumber().longValue());
+            } else if (f.getType() == byte.class) {
+                f.set(instance, value.getAsNumber().byteValue());
+            } else if (f.getType() == float.class) {
+                f.set(instance, value.getAsNumber().floatValue());
+            } else if (f.getType() == short.class) {
+                f.set(instance, value.getAsNumber().shortValue());
+            } else {
+                f.set(instance, (value.getAsNumber()));
+            }
         }
     }
 }

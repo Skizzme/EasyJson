@@ -8,7 +8,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Map;
 
 public class EasyJson {
 
@@ -16,6 +18,22 @@ public class EasyJson {
 
     public static JsonObject serialize(Object obj) {
         return serialize(obj, new SpecifyJsonField[0], new SpecifyJsonGetterSetter[0]);
+    }
+
+    public static JsonArray serialize(Collection<?> obj) {
+        JsonArray array = new JsonArray();
+        for (Object element : obj) {
+            array.add(serialize(element));
+        }
+        return array;
+    }
+
+    public static JsonObject serialize(Map obj) {
+        JsonObject object = new JsonObject();
+        for (Object key : obj.keySet()) {
+            object.add(serialize(key).toString(), serialize(obj.get(key)));
+        }
+        return object;
     }
 
     public static JsonObject serialize(Object obj, SpecifyJsonField[] specified_fields, SpecifyJsonGetterSetter[] specified_methods) {
@@ -41,7 +59,7 @@ public class EasyJson {
             }
         }
 
-        for (Field field : obj.getClass().getDeclaredFields()) {
+        for (Field field : obj.getClass().getFields()) {
             Annotation[] annotations = field.getDeclaredAnnotations();
 
             try {
@@ -87,11 +105,12 @@ public class EasyJson {
                     }
                     if (a instanceof JsonPropertyField annotation) {
                         field.setAccessible(true);
+                        System.out.println(object);
                         addProperty(field.get(obj), object, null, annotation);
                     }
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
-                } catch (InaccessibleObjectException | NoSuchMethodException | InvocationTargetException e) {
+                } catch (InaccessibleObjectException | NoSuchMethodException | InvocationTargetException | NullPointerException e) {
                     e.printStackTrace();
                 }
             }
@@ -124,6 +143,19 @@ public class EasyJson {
         } else if (value instanceof Iterable<?> val) {
             JsonArray array = new JsonArray();
             for (Object o : val) {
+                array.add(serialize(o));
+            }
+            object.add(name, array);
+        } else if (value instanceof Map) {
+            Map map = (Map) value;
+            JsonObject obj = new JsonObject();
+            for (Object o : map.keySet()) {
+                obj.add(o.toString(), serialize(o));
+            }
+            object.add(name, obj);
+        } else if (value.getClass().isArray()) {
+            JsonArray array = new JsonArray();
+            for (Object o : (Object[]) value) {
                 array.add(serialize(o));
             }
             object.add(name, array);
