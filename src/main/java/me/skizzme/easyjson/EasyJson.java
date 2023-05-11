@@ -1,13 +1,12 @@
 package me.skizzme.easyjson;
 
 import com.google.gson.*;
+import com.google.gson.internal.Primitives;
+import jdk.swing.interop.SwingInterOpUtils;
 import me.skizzme.easyjson.annotation.*;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
-import java.lang.reflect.InaccessibleObjectException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,6 +36,9 @@ public class EasyJson {
     }
 
     public static JsonObject serialize(Object obj, SpecifyJsonField[] specified_fields, SpecifyJsonGetterSetter[] specified_methods) {
+        if (obj == null) {
+            return null;
+        }
         JsonObject object = new JsonObject();
         HashMap<String, String> mapped_field_names = new HashMap<>();
         HashMap<String, String> mapped_method_getter_names = new HashMap<>();
@@ -105,7 +107,6 @@ public class EasyJson {
                     }
                     if (a instanceof JsonPropertyField annotation) {
                         field.setAccessible(true);
-//                        System.out.println(object);
                         addProperty(field.get(obj), object, null, annotation);
                     }
                 } catch (IllegalAccessException e) {
@@ -117,6 +118,20 @@ public class EasyJson {
         }
 
         return object;
+    }
+
+    private static JsonElement getAsPrimitiveOrObject(Object o) {
+        if (o instanceof String ob) {
+            return new JsonPrimitive(ob);
+        } else if (o instanceof Boolean ob) {
+            return new JsonPrimitive(ob);
+        } else if (o instanceof Number ob) {
+            return new JsonPrimitive(ob);
+        } else if (o instanceof Character ob) {
+            return new JsonPrimitive(ob);
+        } else {
+            return serialize(o);
+        }
     }
 
     private static void addProperty(Object value, JsonObject object, String name, JsonPropertyField annotation) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException {
@@ -143,24 +158,27 @@ public class EasyJson {
         } else if (value instanceof Iterable<?> val) {
             JsonArray array = new JsonArray();
             for (Object o : val) {
-                array.add(serialize(o));
+                array.add(getAsPrimitiveOrObject(o));
             }
             object.add(name, array);
         } else if (value instanceof Map) {
             Map map = (Map) value;
             JsonObject obj = new JsonObject();
             for (Object o : map.keySet()) {
-                obj.add(o.toString(), serialize(o));
+//                addProperty(map.get(o), obj, o.toString(), null);
+                obj.add(o.toString(), getAsPrimitiveOrObject(map.get(o)));
             }
             object.add(name, obj);
         } else if (value.getClass().isArray()) {
             JsonArray array = new JsonArray();
             for (Object o : (Object[]) value) {
-                array.add(serialize(o));
+                array.add(getAsPrimitiveOrObject(o));
             }
             object.add(name, array);
-        } else { // Will attempt to convert it with GSON's built-in conversions like lists, and hashmaps
-            object.add(name, gson.fromJson(gson.toJson(value), JsonElement.class));
+        } else {
+            // Would attempt to convert it with GSON's built-in conversions like lists, and hashmaps
+//            object.add(name, gson.fromJson(gson.toJson(value), JsonElement.class));
+            object.add(name, serialize(value));
         }
     }
 }

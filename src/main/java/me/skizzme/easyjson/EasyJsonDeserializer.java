@@ -6,24 +6,19 @@ import me.skizzme.easyjson.exception.NoInstantiationMethod;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
+
+import static java.lang.reflect.Array.newInstance;
 
 public class EasyJsonDeserializer<T> {
-
-    public static Gson gson = new GsonBuilder().create();
 
     public T deserialize(JsonObject json, T instance) {
         return this.deserialize(json, instance, new SpecifyJsonField[0], new SpecifyJsonGetterSetter[0]);
     }
 
-    public Collection deserializeList(JsonArray json, T instance) {
+    public <O> Collection deserializeList(JsonArray json, T instance) {
         Collection<T> list = new ArrayList<>();
         for (JsonElement e : json) {
-//            System.out.println("ABC" + e);
-//            System.out.print(instance.getClass().getGenericSuperclass().getTypeName());
             try {
                 list.add(this.deserialize(e.getAsJsonObject(), instance, new SpecifyJsonField[0], new SpecifyJsonGetterSetter[0]));
             } catch (Exception ex) {
@@ -46,7 +41,6 @@ public class EasyJsonDeserializer<T> {
             throw new NullPointerException("Instance is null for json: " + json);
         }
         Class c = instance.getClass();
-//        System.out.println(json);
 
         //Mapping fields and setters as variable_name -> json_name
         HashMap<String, String> mapped_field_names = new HashMap<>();
@@ -63,7 +57,7 @@ public class EasyJsonDeserializer<T> {
         for (Method m : c.getMethods()) {
             try {
                 if (mapped_method_setter_names.containsKey(m.getName())) {
-                    JsonPrimitive jvalue = json.get(mapped_method_setter_names.get(mapped_method_setter_names.get(m.getName()))).getAsJsonPrimitive();
+                    JsonPrimitive jvalue = json.get(mapped_method_setter_names.get(m.getName())).getAsJsonPrimitive();
                     if (jvalue.isString()) {
                         m.invoke(instance, jvalue.getAsString());
                     }
@@ -71,7 +65,12 @@ public class EasyJsonDeserializer<T> {
                         m.invoke(instance, jvalue.getAsBoolean());
                     }
                     if (jvalue.isNumber()) {
-                        m.invoke(instance, jvalue.getAsNumber());
+                        Class cl = m.getParameterTypes()[0];
+                        if (cl == double.class) {
+                            m.invoke(instance, jvalue.getAsDouble());
+                        } else {
+                            m.invoke(instance, jvalue.getAsNumber());
+                        }
                     }
                 }
             } catch (InvocationTargetException | IllegalAccessException e) {
@@ -127,27 +126,37 @@ public class EasyJsonDeserializer<T> {
                         f.setAccessible(true);
                         JsonElement field_json = json.get(anno.name());
 
-                        // Sets the enum from the ordinal integer
-                        if (f.getType().isEnum()) {
-                            f.set(instance, ((Object[]) f.getType().getMethod("values").invoke(f))[field_json.getAsJsonPrimitive().getAsInt()]);
-                        }
-                        else if (field_json.isJsonPrimitive()) {
-                            setJsonPrimitive(field_json.getAsJsonPrimitive(), f, instance);
-                        }
-                        // Will loop through each element of the json array and deserialize each one as the specified generic type of the field
-                        else if (field_json.isJsonArray()) {
-                            if (f.getType().isArray()) {
-                                Object[] array = (Object[]) f.get(instance);
-                                JsonArray json_array = field_json.getAsJsonArray();
-                                for (int i = 0; i < json_array.size(); i++) {
-                                    if (!json_array.get(i).isJsonNull()) {
-                                        array[i] = new EasyJsonDeserializer<>().deserialize(json_array.get(i).getAsJsonObject(), newInstance(f.getType().getComponentType()));
-                                    }
+                        if (field_json != null) {
+                            // Sets the enum from the ordinal integer
+                            if (f.getType().isEnum()) {
+                                f.set(instance, ((Object[]) f.getType().getMethod("values").invoke(f))[field_json.getAsJsonPrimitive().getAsInt()]);
+                            } else if (f.getType().getSuperclass() == AbstractMap.class) {
+                                for (Map.Entry<String, JsonElement> stringJsonElementEntry : field_json.getAsJsonObject().entrySet()) {
+                                    Map.Entry<String, JsonElement> s = (Map.Entry) stringJsonElementEntry;
                                 }
-                            } else {
-                                Collection field_array = (Collection) f.get(instance);
-                                for (JsonElement element : field_json.getAsJsonArray()) {
-                                    field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]))));
+//                                for (Map.Entry<String, JsonElement> s : field_json.getAsJsonObject().entrySet()) {
+//                                    ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[1]
+//                                    ((Map) f.get(instance)).put(s.getKey(), );
+//                                }
+                            } else if (field_json.isJsonPrimitive()) {
+                                setJsonPrimitive(field_json.getAsJsonPrimitive(), f, instance);
+                            }
+                            // Will loop through each element of the json array and deserialize each one as the specified generic type of the field
+                            else if (field_json.isJsonArray()) {
+                                if (f.getType().isArray()) {
+                                    Object[] array = (Object[]) f.get(instance);
+                                    JsonArray json_array = field_json.getAsJsonArray();
+                                    for (int i = 0; i < json_array.size(); i++) {
+                                        if (!json_array.get(i).isJsonNull()) {
+                                            array[i] = new EasyJsonDeserializer<>().deserialize(json_array.get(i).getAsJsonObject(), newInstance(f.getType().getComponentType()));
+                                        }
+                                    }
+                                } else {
+                                    Collection field_array = (Collection) f.get(instance);
+                                    for (JsonElement element : field_json.getAsJsonArray()) {
+//                                        field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]))));
+                                        field_array.add(getAsPrimitiveOrObject(element, ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]));
+                                    }
                                 }
                             }
                         }
@@ -168,6 +177,22 @@ public class EasyJsonDeserializer<T> {
         return instance;
     }
 
+    private static Object getAsPrimitiveOrObject(JsonElement o, Type type) throws NoInstantiationMethod, InvocationTargetException, IllegalAccessException, InstantiationException {
+        if (o.isJsonPrimitive()){
+            JsonPrimitive p = o.getAsJsonPrimitive();
+            if (p.isNumber()) {
+                return p.getAsNumber();
+            }
+            if (p.isString()) {
+                return p.getAsString();
+            }
+            if (p.isBoolean()) {
+                return p.getAsBoolean();
+            }
+        }
+        return new EasyJsonDeserializer<>().deserialize(o.getAsJsonObject(), newInstance((Class) type));
+    }
+
     /**
      * Attempts to create a new instance of the given class using a constructor with no parameters or a method with the {@code @JsonInstantiationMethod} annotation.
      */
@@ -184,6 +209,8 @@ public class EasyJsonDeserializer<T> {
         }
         throw new NoInstantiationMethod("No instantiation method or viable constructor was found for " + clazz + ". Please manually set the field.");
     }
+
+//    private static Object getPrimitiveOrObject(Class type, Objec)
 
     private static void setJsonPrimitive(JsonPrimitive value, Field f, Object instance) throws IllegalAccessException {
         if (value.isString()) {
