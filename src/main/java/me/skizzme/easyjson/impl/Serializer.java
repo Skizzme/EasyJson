@@ -2,6 +2,7 @@ package me.skizzme.easyjson.impl;
 
 import com.google.gson.*;
 import me.skizzme.easyjson.annotation.*;
+import sun.misc.Unsafe;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -41,12 +42,12 @@ public class Serializer {
         JsonObject object = new JsonObject();
         HashMap<String, String> mapped_field_names = new HashMap<>();
         HashMap<String, String> mapped_method_getter_names = new HashMap<>();
-        for (SpecifyJsonField fi : specified_fields) {
+
+        for (SpecifyJsonField fi : specified_fields)
             if (!fi.variable_name().equals("")) mapped_field_names.put(fi.variable_name(), fi.json_name());
-        }
-        for (SpecifyJsonGetterSetter mi : specified_methods) {
+
+        for (SpecifyJsonGetterSetter mi : specified_methods)
             if (!mi.getter_name().equals("")) mapped_method_getter_names.put(mi.getter_name(), mi.json_name());
-        }
 
         // Will check the methods if they are specified getter methods, and if they are they wil
         for (Method m : obj.getClass().getMethods()) {
@@ -61,6 +62,7 @@ public class Serializer {
         }
 
         for (Field field : obj.getClass().getDeclaredFields()) {
+            long st = System.nanoTime();
             Annotation[] annotations = field.getDeclaredAnnotations();
 
             field.setAccessible(true);
@@ -76,12 +78,12 @@ public class Serializer {
             } catch (NoSuchMethodException e) {
                 e.printStackTrace();
             }
+            System.out.println("1: " + (System.nanoTime() - st) / 1e6f);
 
             for (Annotation a : annotations) {
                 try {
                     if (a instanceof JsonField) {
                         JsonField annotation = (JsonField) a;
-                        field.setAccessible(true);
                         Object value = field.get(obj);
 
                         String name = annotation.name();
@@ -97,27 +99,29 @@ public class Serializer {
                         } catch (InstantiationException e) {
                             System.err.println("Could not instantiate class \"" + serializer.getName() + "\" (" + e.getStackTrace()[0] + ")");
                         }
+                        System.out.println("2.1: " + (System.nanoTime() - st) / 1e6f);
                     }
-                    if (a instanceof JsonObjectField) {
+                    else if (a instanceof JsonObjectField) {
                         JsonObjectField annotation = (JsonObjectField) a;
-                        field.setAccessible(true);
                         Object value = field.get(obj);
-
-                        String name = annotation.name();
-                        object.add(name, serialize(value, annotation.fields(), annotation.methods()));
+                        System.out.println("2.25: " + (System.nanoTime() - st) / 1e6f);
+                        object.add(annotation.name(), serialize(value, annotation.fields(), annotation.methods()));
+                        System.out.println("2.2: " + (System.nanoTime() - st) / 1e6f);
                     }
-                    if (a instanceof JsonPropertyField) {
+                    else if (a instanceof JsonPropertyField) {
                         JsonPropertyField annotation = (JsonPropertyField) a;
-                        field.setAccessible(true);
                         addProperty(field.get(obj), object, null, annotation);
+                        System.out.println("2.3: " + (System.nanoTime() - st) / 1e6f);
                     }
                 } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException |
                          NullPointerException e) {
                     e.printStackTrace();
                 }
             }
+            System.out.println("2: " + (System.nanoTime() - st) / 1e6f);
 
             field.setAccessible(false);
+            System.out.println("3: " + (System.nanoTime() - st) / 1e6f + ", " + field.getName());
         }
 
         return object;
@@ -159,7 +163,6 @@ public class Serializer {
         } else if (value instanceof Character) {
             object.addProperty(name, (Character) value);
         } else if (value instanceof Iterable<?>) {
-            System.out.println(name);
             Iterable<?> val = (Iterable<?>) value;
             JsonArray array = new JsonArray();
             for (Object o : val) {
@@ -170,7 +173,6 @@ public class Serializer {
             Map map = (Map) value;
             JsonObject obj = new JsonObject();
             for (Object o : map.keySet()) {
-//                addProperty(map.get(o), obj, o.toString(), null);
                 obj.add(o.toString(), getAsPrimitiveOrObject(map.get(o)));
             }
             object.add(name, obj);

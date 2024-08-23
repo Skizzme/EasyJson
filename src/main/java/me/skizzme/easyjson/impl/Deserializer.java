@@ -42,7 +42,7 @@ public class Deserializer<T> {
         if (instance == null) {
             throw new NullPointerException("Instance is null for json: " + json);
         }
-        Class c = instance.getClass();
+        Class<?> c = instance.getClass();
 
         //Mapping fields and setters as variable_name -> json_name
         HashMap<String, String> mapped_field_names = new HashMap<>();
@@ -80,8 +80,6 @@ public class Deserializer<T> {
             }
         }
         // Checks fields and then sets them using the provided JSON object
-//        System.out.println(Arrays.toString(c.getDeclaredFields()));
-//        System.out.println(Arrays.toString(c.getFields()));
         for (Field f : c.getDeclaredFields()) {
             f.setAccessible(true);
             try {
@@ -92,19 +90,16 @@ public class Deserializer<T> {
             } catch (IllegalAccessException e) {
                 e.printStackTrace();
             }
-//            System.out.println(f.getName() + ", " + Arrays.toString(f.getDeclaredAnnotations()));
             for (Annotation a : f.getDeclaredAnnotations()) {
                 try {
                     if (a instanceof JsonField) {
                         JsonField anno = (JsonField) a;
-                        f.setAccessible(true);
                         f.set(instance, anno.serializer().getDeclaredMethod("deserialize", JsonObject.class).invoke(anno.serializer().getConstructors()[0].newInstance(), json.get(anno.name())));
                     }
-                    if (a instanceof JsonObjectField) {
+                    else if (a instanceof JsonObjectField) {
                         JsonObjectField anno = (JsonObjectField) a;
 
                         JsonElement field_json = json.get(anno.name());
-                        f.setAccessible(true);
                         if (f.getType().isArray()) {
                             Object[] array = (Object[]) f.get(instance);
                             JsonArray json_array = field_json.getAsJsonArray();
@@ -135,7 +130,7 @@ public class Deserializer<T> {
                         }
                         // Deserializes the json object into the field instance
                         if (!json.has(anno.name())) {
-//                            System.out.println("Json key '" + anno.name() + "' was not found in json source");
+                            System.out.println("Json key '" + anno.name() + "' was not found in json source");
                             continue;
                         }
                         JsonElement object = json.get(anno.name());
@@ -150,9 +145,8 @@ public class Deserializer<T> {
                                         )
                         );
                     }
-                    if (a instanceof JsonPropertyField) {
+                    else if (a instanceof JsonPropertyField) {
                         JsonPropertyField anno = (JsonPropertyField)a;
-                        f.setAccessible(true);
                         JsonElement field_json = json.get(anno.name());
 
                         if (field_json != null) {
@@ -162,6 +156,7 @@ public class Deserializer<T> {
                             } else if (f.getType().getSuperclass() == AbstractMap.class) {
                                 for (Map.Entry<String, JsonElement> stringJsonElementEntry : field_json.getAsJsonObject().entrySet()) {
                                     Map.Entry<String, JsonElement> s = (Map.Entry) stringJsonElementEntry;
+                                    // TODO
                                 }
 //                                for (Map.Entry<String, JsonElement> s : field_json.getAsJsonObject().entrySet()) {
 //                                    ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[1]
@@ -192,23 +187,11 @@ public class Deserializer<T> {
                                         field_array.add(getAsPrimitiveOrObject(element, ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0], o));
                                         i++;
                                     }
-//                                    for (JsonElement element : field_json.getAsJsonArray()) {
-//                                        field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]))));
-//                                        field_array.add(getAsPrimitiveOrObject(element, ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]));
-//                                    }
                                 }
                             }
                         }
                     }
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                } catch (InvocationTargetException e) {
-                    e.printStackTrace();
-                } catch (InstantiationException e) {
-                    e.printStackTrace();
-                } catch (NoSuchMethodException e) {
-                    e.printStackTrace();
-                } catch (NoInstantiationMethod e) {
+                } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException | InstantiationException | NoInstantiationMethod e) {
                     e.printStackTrace();
                 }
             }
