@@ -1,6 +1,9 @@
-package me.skizzme.easyjson;
+package me.skizzme.easyjson.impl;
 
-import com.google.gson.*;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import me.skizzme.easyjson.annotation.*;
 import me.skizzme.easyjson.exception.NoInstantiationMethod;
 
@@ -8,15 +11,13 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
 
-import static java.lang.reflect.Array.newInstance;
-
-public class EasyJsonDeserializer<T> {
+public class Deserializer<T> {
 
     public T deserialize(JsonObject json, T instance) {
         return this.deserialize(json, instance, new SpecifyJsonField[0], new SpecifyJsonGetterSetter[0]);
     }
 
-    public <O> Collection deserializeList(JsonArray json, T instance) {
+    public Collection<T> deserializeList(JsonArray json, T instance) {
         Collection<T> list = new ArrayList<>();
         for (JsonElement e : json) {
             try {
@@ -36,6 +37,7 @@ public class EasyJsonDeserializer<T> {
      * @param instance Instance of the class that is being deserialized
      * @return The instance provided with all deserializable variables set
      */
+    // TODO make it so that the deserializer doesn't necessarily have to have an instance, and could instead create an instance by finding an appropriate initializer and calling it with found vars
     public T deserialize(JsonObject json, T instance, SpecifyJsonField[] specified_fields, SpecifyJsonGetterSetter[] specified_methods) {
         if (instance == null) {
             throw new NullPointerException("Instance is null for json: " + json);
@@ -50,7 +52,7 @@ public class EasyJsonDeserializer<T> {
         }
 
         for (SpecifyJsonGetterSetter mi : specified_methods) {
-            if (!mi.setter_method_name().equals("")) mapped_method_setter_names.put(mi.setter_method_name(), mi.json_name());
+            if (!mi.setter_name().equals("")) mapped_method_setter_names.put(mi.setter_name(), mi.json_name());
         }
 
         //Checks methods for if they are specified setter
@@ -78,7 +80,10 @@ public class EasyJsonDeserializer<T> {
             }
         }
         // Checks fields and then sets them using the provided JSON object
+//        System.out.println(Arrays.toString(c.getDeclaredFields()));
+//        System.out.println(Arrays.toString(c.getFields()));
         for (Field f : c.getDeclaredFields()) {
+            f.setAccessible(true);
             try {
                 if (mapped_field_names.containsKey(f.getName())) {
                     f.setAccessible(true);
@@ -87,31 +92,40 @@ public class EasyJsonDeserializer<T> {
             } catch (IllegalAccessException e) {
                 e.printStackTrace();
             }
-
+//            System.out.println(f.getName() + ", " + Arrays.toString(f.getDeclaredAnnotations()));
             for (Annotation a : f.getDeclaredAnnotations()) {
                 try {
-                    if (a instanceof JsonField anno) {
+                    if (a instanceof JsonField) {
+                        JsonField anno = (JsonField) a;
                         f.setAccessible(true);
                         f.set(instance, anno.serializer().getDeclaredMethod("deserialize", JsonObject.class).invoke(anno.serializer().getConstructors()[0].newInstance(), json.get(anno.name())));
                     }
-                    if (a instanceof JsonObjectField anno) {
+                    if (a instanceof JsonObjectField) {
+                        JsonObjectField anno = (JsonObjectField) a;
 
                         JsonElement field_json = json.get(anno.name());
+                        f.setAccessible(true);
                         if (f.getType().isArray()) {
                             Object[] array = (Object[]) f.get(instance);
                             JsonArray json_array = field_json.getAsJsonArray();
                             for (int i = 0; i < json_array.size(); i++) {
                                 if (!json_array.get(i).isJsonNull()) {
-                                    array[i] = new EasyJsonDeserializer<>().deserialize(json_array.get(i).getAsJsonObject(), newInstance(f.getType().getComponentType()), anno.fields(), anno.methods());
+                                    array[i] = new Deserializer<>().deserialize(json_array.get(i).getAsJsonObject(), newInstance(f.getType().getComponentType()), anno.fields(), anno.methods());
                                 }
                             }
                         } else if (f.get(instance) instanceof Collection) {
                             Collection field_array = (Collection) f.get(instance);
+                            Object[] arr = field_array.stream().toArray();
+                            int i = 0;
                             for (JsonElement element : field_json.getAsJsonArray()) {
-                                field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0])), anno.fields(), anno.methods()));
+                                Object o = newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]));
+                                if (field_array.size() <= i) {
+                                    o = arr[i];
+                                }
+                                field_array.add(new Deserializer<>().deserialize(element.getAsJsonObject(), o, anno.fields(), anno.methods()));
+                                i++;
                             }
                         }
-                        f.setAccessible(true);
                         // Creates an instance of the field type if it is not already set
                         Object f_instance;
                         if (f.get(instance) == null) {
@@ -120,9 +134,24 @@ public class EasyJsonDeserializer<T> {
                             f_instance = f.get(instance);
                         }
                         // Deserializes the json object into the field instance
-                        f.set(instance, new EasyJsonDeserializer<>().deserialize(json.getAsJsonObject(anno.name()), f_instance, anno.fields(), anno.methods()));
+                        if (!json.has(anno.name())) {
+//                            System.out.println("Json key '" + anno.name() + "' was not found in json source");
+                            continue;
+                        }
+                        JsonElement object = json.get(anno.name());
+                        f.set(instance,
+                                object.isJsonNull() ?
+                                        null :
+                                        new Deserializer<>().deserialize(
+                                                object.getAsJsonObject(),
+                                                f_instance,
+                                                anno.fields(),
+                                                anno.methods()
+                                        )
+                        );
                     }
-                    if (a instanceof JsonPropertyField anno) {
+                    if (a instanceof JsonPropertyField) {
+                        JsonPropertyField anno = (JsonPropertyField)a;
                         f.setAccessible(true);
                         JsonElement field_json = json.get(anno.name());
 
@@ -148,15 +177,25 @@ public class EasyJsonDeserializer<T> {
                                     JsonArray json_array = field_json.getAsJsonArray();
                                     for (int i = 0; i < json_array.size(); i++) {
                                         if (!json_array.get(i).isJsonNull()) {
-                                            array[i] = new EasyJsonDeserializer<>().deserialize(json_array.get(i).getAsJsonObject(), newInstance(f.getType().getComponentType()));
+                                            array[i] = new Deserializer<>().deserialize(json_array.get(i).getAsJsonObject(), newInstance(f.getType().getComponentType()));
                                         }
                                     }
                                 } else {
                                     Collection field_array = (Collection) f.get(instance);
+                                    Object[] arr = field_array.stream().toArray();
+                                    int i = 0;
                                     for (JsonElement element : field_json.getAsJsonArray()) {
-//                                        field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]))));
-                                        field_array.add(getAsPrimitiveOrObject(element, ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]));
+                                        Object o = newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]));
+                                        if (field_array.size() <= i) {
+                                            o = arr[i];
+                                        }
+                                        field_array.add(getAsPrimitiveOrObject(element, ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0], o));
+                                        i++;
                                     }
+//                                    for (JsonElement element : field_json.getAsJsonArray()) {
+//                                        field_array.add(new EasyJsonDeserializer<>().deserialize(element.getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]))));
+//                                        field_array.add(getAsPrimitiveOrObject(element, ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]));
+//                                    }
                                 }
                             }
                         }
@@ -173,11 +212,12 @@ public class EasyJsonDeserializer<T> {
                     e.printStackTrace();
                 }
             }
+            f.setAccessible(false);
         }
         return instance;
     }
 
-    private static Object getAsPrimitiveOrObject(JsonElement o, Type type) throws NoInstantiationMethod, InvocationTargetException, IllegalAccessException, InstantiationException {
+    private static Object getAsPrimitiveOrObject(JsonElement o, Type type, Object instance) throws NoInstantiationMethod, InvocationTargetException, IllegalAccessException, InstantiationException {
         if (o.isJsonPrimitive()){
             JsonPrimitive p = o.getAsJsonPrimitive();
             if (p.isNumber()) {
@@ -190,7 +230,8 @@ public class EasyJsonDeserializer<T> {
                 return p.getAsBoolean();
             }
         }
-        return new EasyJsonDeserializer<>().deserialize(o.getAsJsonObject(), newInstance((Class) type));
+        if (instance == null) instance = newInstance((Class) type);
+        return new Deserializer<>().deserialize(o.getAsJsonObject(), newInstance((Class) type));
     }
 
     /**

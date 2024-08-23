@@ -2,6 +2,7 @@ package me.skizzme.easyjson;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import me.skizzme.easyjson.impl.Serializer;
 
 public class JsonBuilder {
 
@@ -23,7 +24,7 @@ public class JsonBuilder {
         if (o instanceof JsonElement) {
             json.add(key, (JsonElement) o);
         } else {
-            json.add(key, EasyJson.serialize(o));
+            json.add(key, Serializer.serialize(o));
         }
         return this;
     }

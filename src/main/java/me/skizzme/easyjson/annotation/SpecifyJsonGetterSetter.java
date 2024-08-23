@@ -9,6 +9,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface SpecifyJsonGetterSetter {
     String json_name();
-    String getter_method_name() default "";
-    String setter_method_name() default "";
+    String getter_name() default "";
+    String setter_name() default "";
 }
