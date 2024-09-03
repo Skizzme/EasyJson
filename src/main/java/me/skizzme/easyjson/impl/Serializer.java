@@ -2,7 +2,6 @@ package me.skizzme.easyjson.impl;
 
 import com.google.gson.*;
 import me.skizzme.easyjson.annotation.*;
-import sun.misc.Unsafe;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;

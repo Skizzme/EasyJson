@@ -154,14 +154,13 @@ public class Deserializer<T> {
                             if (f.getType().isEnum()) {
                                 f.set(instance, ((Object[]) f.getType().getMethod("values").invoke(f))[field_json.getAsJsonPrimitive().getAsInt()]);
                             } else if (f.getType().getSuperclass() == AbstractMap.class) {
+                                AbstractMap casted = (AbstractMap) f.get(instance);
                                 for (Map.Entry<String, JsonElement> stringJsonElementEntry : field_json.getAsJsonObject().entrySet()) {
                                     Map.Entry<String, JsonElement> s = (Map.Entry) stringJsonElementEntry;
-                                    // TODO
+                                    Object key = convertKeyTo(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]), s.getKey());
+                                    Object value = new Deserializer<>().deserialize(stringJsonElementEntry.getValue().getAsJsonObject(), newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[1])));
+                                    casted.put(key, value);
                                 }
-//                                for (Map.Entry<String, JsonElement> s : field_json.getAsJsonObject().entrySet()) {
-//                                    ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[1]
-//                                    ((Map) f.get(instance)).put(s.getKey(), );
-//                                }
                             } else if (field_json.isJsonPrimitive()) {
                                 setJsonPrimitive(field_json.getAsJsonPrimitive(), f, instance);
                             }
@@ -181,7 +180,7 @@ public class Deserializer<T> {
                                     int i = 0;
                                     for (JsonElement element : field_json.getAsJsonArray()) {
                                         Object o = newInstance(((Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0]));
-                                        if (field_array.size() <= i) {
+                                        if (field_array.size() < i) {
                                             o = arr[i];
                                         }
                                         field_array.add(getAsPrimitiveOrObject(element, ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0], o));
@@ -222,9 +221,14 @@ public class Deserializer<T> {
      */
     public static Object newInstance(Class<?> clazz) throws InvocationTargetException, IllegalAccessException, InstantiationException, NoInstantiationMethod {
         for (Method m : clazz.getDeclaredMethods()) {
-            m.setAccessible(true);
-            for (Annotation a : m.getDeclaredAnnotations()) {
-                if (a instanceof JsonInstantiateMethod) return m.invoke(null);
+            try {
+                m.setAccessible(true);
+                for (Annotation a : m.getDeclaredAnnotations()) {
+                    if (a instanceof JsonInstantiateMethod) return m.invoke(null);
+                }
+                m.setAccessible(false);
+            } catch (Exception e) {
+//                e.printStackTrace();
             }
         }
         for (Constructor<?> con : clazz.getConstructors()) {
@@ -234,7 +238,43 @@ public class Deserializer<T> {
         throw new NoInstantiationMethod("No instantiation method or viable constructor was found for " + clazz + ". Please manually set the field.");
     }
 
-//    private static Object getPrimitiveOrObject(Class type, Objec)
+    private static Object convertKeyTo(Class<?> type, String value) throws NoInstantiationMethod, InvocationTargetException, IllegalAccessException, InstantiationException {
+        if (type == int.class || type == Integer.class) {
+            return Integer.parseInt(value);
+        } else if (type == long.class || type == Long.class) {
+            return Long.parseLong(value);
+        } else if (type == boolean.class || type == Boolean.class) {
+            return Boolean.parseBoolean(value);
+        } else if (type == double.class || type == Double.class) {
+            return Double.parseDouble(value);
+        } else if (type == float.class || type == Float.class) {
+            return Float.parseFloat(value);
+        } else if (type == char.class || type == Character.class) {
+            return (char) value.getBytes()[0];
+        } else if (type == String.class) {
+            return value;
+        }
+        return null;
+    }
+
+    private static Object getPrimitiveOrObject(Class<?> type, JsonObject value) throws NoInstantiationMethod, InvocationTargetException, IllegalAccessException, InstantiationException {
+        if (type == int.class || type == Integer.class) {
+            return value.getAsInt();
+        } else if (type == long.class || type == Long.class) {
+            return value.getAsLong();
+        } else if (type == boolean.class || type == Boolean.class) {
+            return value.getAsBoolean();
+        } else if (type == double.class || type == Double.class) {
+            return value.getAsDouble();
+        } else if (type == float.class || type == Float.class) {
+            return value.getAsFloat();
+        } else if (type == char.class || type == Character.class) {
+            return value.getAsCharacter();
+        } else if (type == String.class) {
+            return value.getAsString();
+        }
+        return newInstance(type);
+    }
 
     private static void setJsonPrimitive(JsonPrimitive value, Field f, Object instance) throws IllegalAccessException {
         if (value.isString()) {
